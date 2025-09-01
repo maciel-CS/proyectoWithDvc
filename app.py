@@ -6,16 +6,21 @@ from tensorflow.keras.applications.efficientnet import preprocess_input
 
 app = Flask(__name__)
 
-# Clases reales (ajusta con tu dataset)
-class_names = ["0_9","10_19","20_29","30_39","40_49","50_59","60_69","70_79","80_plus"]
+# 🔹 Clases de los modelos
+class_names_age = ["0_9","10_19","20_29","30_39","40_49","50_59","60_69","70_79","80_plus"]
+class_names_gender = ["Hombre", "Mujer"]  # ejemplo
 
-# Cargar modelo
-model = tf.keras.models.load_model(
+# 🔹 Cargar modelos
+model_age = tf.keras.models.load_model(
     "ml/best_head.keras",
     custom_objects={"preprocess_input": preprocess_input}
 )
+model_gender = tf.keras.models.load_model(
+    "ml/genero_head.keras",
+    custom_objects={"preprocess_input": preprocess_input}
+)
 
-@app.route('/', methods=["GET", "POST"])
+@app.route('/', methods=["GET"])
 def home():
     return render_template("index.html")
 
@@ -26,28 +31,40 @@ def predict():
         return "Archivo vacío o inválido", 400
 
     file_bytes = np.frombuffer(file.read(), np.uint8)
-    
-    # 🔹 Validar antes de usar OpenCV
     if file_bytes.size == 0:
         return "Archivo vacío o inválido", 400
 
     image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
     if image is None:
-        return "Archivo vacío o inválido", 400
+        return "Archivo inválido", 400
 
-    # Procesamiento normal
-    image = cv2.resize(image, (380, 380))
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    image = preprocess_input(image.astype("float32"))
-    image = np.expand_dims(image, axis=0)
+    # 🔹 Preprocesamiento común
+    image_resized = cv2.resize(image, (380, 380))  # tamaño para el modelo de edad
+    image_rgb = cv2.cvtColor(image_resized, cv2.COLOR_BGR2RGB)
+    image_pre = preprocess_input(image_rgb.astype("float32"))
+    image_input = np.expand_dims(image_pre, axis=0)
 
-    prediction = model.predict(image)
-    pred_idx = int(np.argmax(prediction, axis=1)[0])
-    pred_cls = class_names[pred_idx]
-    conf = float(np.max(prediction))
+    # 🔹 Predicción de edad
+    pred_age = model_age.predict(image_input)
+    idx_age = int(np.argmax(pred_age, axis=1)[0])
+    age_class = class_names_age[idx_age]
+    age_conf = float(np.max(pred_age))
 
-    return f"Edad de Predicción: {pred_cls} (confianza: {conf:.2f})"
+    # 🔹 Predicción de género (si el tamaño de input es distinto, redimensiona)
+    image_resized_gender = cv2.resize(image, (224, 224))  # ajusta según tu modelo
+    image_rgb_gender = cv2.cvtColor(image_resized_gender, cv2.COLOR_BGR2RGB)
+    image_pre_gender = preprocess_input(image_rgb_gender.astype("float32"))
+    image_input_gender = np.expand_dims(image_pre_gender, axis=0)
 
+    pred_gender = model_gender.predict(image_input_gender)
+    idx_gender = int(np.argmax(pred_gender, axis=1)[0])
+    gender_class = class_names_gender[idx_gender]
+    gender_conf = float(np.max(pred_gender))
+
+    # 🔹 Resultado combinado
+    result = f"Edad Predicha: {age_class} (confianza: {age_conf:.2f}) | Género: {gender_class} (confianza: {gender_conf:.2f})"
+    
+    return result
 
 if __name__ == '__main__':
     import os
