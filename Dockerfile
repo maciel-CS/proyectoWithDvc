@@ -7,11 +7,15 @@ EXPOSE 5002
 # Directorio de trabajo
 WORKDIR /app
 
-# Copiar código de la aplicación
-COPY . /app
-
-# Copiar requirements.txt
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# instalar pytest para pruebas
+RUN pip install --no-cache-dir pytest pytest-flask
+
+COPY app.py .
+COPY ml/ ./ml
+COPY templates/ ./templates
 
 # Instalar dependencias del sistema y certificados SSL
 RUN apt-get update && apt-get install -y --no-install-recommends \
